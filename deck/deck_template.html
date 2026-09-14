@@ -1,0 +1,298 @@
+<title>Autonomous Robot Learning Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0f11; --bg2:#12171a; --surface:#161c1f; --surface2:#1c2327;
+  --line:#2a3236; --text:#eef2f2; --text-dim:#9fadb2; --text-faint:#6c7a7f;
+  --accent:#ff7a33; --accent-dim:#8a4321;
+  --good:#5eead4; --good-dim:#2c5d55;
+  --fail:#f2545b; --fail-dim:#6e2a2d;
+  --serif:'Fraunces',Georgia,serif; --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f2ee; --bg2:#eae7e0; --surface:#fdfcfa; --surface2:#eeece6;
+    --line:#d9d5cc; --text:#181613; --text-dim:#57534a; --text-faint:#8a857a;
+    --accent:#c2410c; --accent-dim:#f2d3bd;
+    --good:#0f766e; --good-dim:#cfece8;
+    --fail:#b91c1c; --fail-dim:#f4d3d1;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4f2ee; --bg2:#eae7e0; --surface:#fdfcfa; --surface2:#eeece6;
+  --line:#d9d5cc; --text:#181613; --text-dim:#57534a; --text-faint:#8a857a;
+  --accent:#c2410c; --accent-dim:#f2d3bd;
+  --good:#0f766e; --good-dim:#cfece8;
+  --fail:#b91c1c; --fail-dim:#f4d3d1;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);}
+h1,h2,h3{font-family:var(--serif);font-weight:600;text-wrap:balance;margin:0}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.mono{font-family:var(--mono)}
+#deck{position:relative;width:100%;height:100vh;overflow:hidden;background:
+  radial-gradient(ellipse 900px 500px at 85% -10%, var(--bg2), transparent),
+  var(--bg);}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+  padding:6vh 7vw;opacity:0;transform:translateY(24px);transition:opacity .5s ease,transform .5s ease;pointer-events:none;overflow-y:auto}
+.slide.active{opacity:1;transform:translateY(0);pointer-events:auto}
+.slide-inner{max-width:1180px;margin:0 auto;width:100%}
+.kicker{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.kicker .n{font-family:var(--mono);font-size:12px;color:var(--text-faint)}
+.kicker .rule{flex:1;height:1px;background:var(--line)}
+h1.big{font-size:clamp(2.2rem,4.6vw,3.8rem);line-height:1.05}
+h2.title{font-size:clamp(1.7rem,3.2vw,2.6rem);line-height:1.1;margin-bottom:8px}
+p.lede{font-size:clamp(1rem,1.3vw,1.2rem);color:var(--text-dim);max-width:60ch;line-height:1.55}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:32px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px}
+.stat{font-family:var(--serif);font-size:clamp(2.4rem,5vw,4rem);color:var(--accent);line-height:1}
+.stat-label{color:var(--text-dim);font-size:.9rem;margin-top:8px}
+.pain-num{font-family:var(--mono);color:var(--accent);font-size:.85rem;margin-bottom:10px;display:block}
+.progression{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}
+.progression.of3{grid-template-columns:repeat(3,1fr)}
+.progression.of5{grid-template-columns:repeat(5,1fr)}
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.stage video{width:100%;aspect-ratio:4/3;object-fit:cover;background:#000;display:block}
+.stage .tag{position:absolute;top:8px;left:8px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  background:rgba(0,0,0,.55);color:#fff;padding:3px 7px;border-radius:5px;z-index:2}
+.stage.fail .tag{background:var(--fail)}
+.stage.good .tag{background:var(--good);color:#04201c}
+.stage.goal .tag{background:var(--accent);color:#fff}
+.stage-body{padding:12px 14px 14px}
+.stage-body .stage-title{font-weight:600;font-size:.92rem;margin-bottom:3px}
+.stage-body .stage-metric{font-family:var(--mono);font-size:.78rem;color:var(--text-dim)}
+.arrow-row{display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:1.1rem;margin:0 -4px}
+.loop-diagram{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:34px;flex-wrap:wrap}
+.loop-step{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;flex:1;min-width:140px;text-align:center}
+.loop-step .k{font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:6px}
+.loop-step .v{font-size:.88rem;font-weight:600}
+.loop-arrow{color:var(--text-faint);font-size:1.3rem;flex:0}
+.sponsor-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
+.sponsor-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
+.sponsor-card .name{font-family:var(--serif);font-weight:600;font-size:1.15rem;margin-bottom:8px;color:var(--accent)}
+.sponsor-card p{color:var(--text-dim);font-size:.88rem;line-height:1.5;margin:0}
+.sponsor-card.vision{border-style:dashed}
+.sponsor-card .badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);border:1px solid var(--line);border-radius:20px;padding:2px 8px;display:inline-block;margin-bottom:10px}
+footer.nav{position:fixed;bottom:22px;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:14px;z-index:10}
+.dots{display:flex;gap:8px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--line);cursor:pointer;transition:background .2s,transform .2s;border:none;padding:0}
+.dot.active{background:var(--accent);transform:scale(1.3)}
+.arrows{display:flex;gap:6px}
+.navbtn{background:var(--surface);border:1px solid var(--line);color:var(--text);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+.navbtn:hover{border-color:var(--accent);color:var(--accent)}
+.slidenum{position:fixed;top:22px;right:28px;font-family:var(--mono);font-size:11px;color:var(--text-faint);z-index:10}
+.brandmark{position:fixed;top:22px;left:28px;font-family:var(--mono);font-size:11px;color:var(--text-faint);z-index:10;letter-spacing:.05em}
+.concept-note{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--fail);border:1px solid var(--fail-dim);border-radius:20px;padding:3px 10px;display:inline-block;margin-top:14px}
+.watch-link{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);text-decoration:none;border:1px solid var(--accent-dim);border-radius:20px;padding:5px 14px;margin-top:8px}
+.watch-link:hover{background:var(--accent-dim)}
+.watch-btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--sans);font-weight:600;font-size:.95rem;color:var(--bg);background:var(--accent);text-decoration:none;border-radius:8px;padding:12px 22px;margin-top:26px}
+.watch-btn:hover{opacity:.9}
+.slide.slide-video{padding:3vh 4vw}
+.hero-video{display:block;max-width:100%;max-height:76vh;width:auto;height:auto;object-fit:contain;border-radius:12px;border:1px solid var(--line);background:#000;margin:18px auto 0}
+.icon{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.icon-sm{width:16px;height:16px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card-icon{margin-bottom:12px}
+.thesis{font-family:var(--serif);font-style:italic;font-size:clamp(1.3rem,2.4vw,1.9rem);color:var(--text);margin-top:24px;line-height:1.4;max-width:56ch}
+::selection{background:var(--accent);color:#fff}
+@media (max-width:820px){.grid3,.progression,.progression.of3,.sponsor-grid{grid-template-columns:1fr}}
+</style>
+
+<div id="deck">
+
+  <!-- 1: TITLE -->
+  <section class="slide active" data-i="0">
+    <div class="slide-inner">
+      <span class="eyebrow">AGI House · CoreWeave Hacks</span>
+      <h1 class="big" style="margin-top:14px">Autonomous Robot<br>Learning Loop</h1>
+      <p class="lede" style="margin-top:20px">Robots that detect their own failures, reset themselves, and get better without a human in the loop &mdash; shown through two physical-simulation demos, built and trained end to end tonight.</p>
+      <div class="loop-diagram" style="margin-top:56px">
+        <div class="loop-step"><span class="k">01</span><span class="v">Evaluate</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">02</span><span class="v">Detect failure</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">03</span><span class="v">LLM curriculum</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">04</span><span class="v">Retrain</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">05</span><span class="v">Redeploy</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2: THE VISION (disaster response, moved to the top) -->
+  <section class="slide slide-video" data-i="1">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">01</span><div class="rule"></div><span class="n">THE VISION</span></div>
+      <h2 class="title">Disaster response, autonomously coordinated</h2>
+      <p class="lede">Drone finds patients &rarr; relays position &rarr; dog &amp; humanoid respond.</p>
+      <video class="hero-video" src="{{VIDEO:vision_disaster}}" autoplay muted loop playsinline></video>
+    </div>
+  </section>
+
+  <!-- 3: HYPE / PAIN POINTS -->
+  <section class="slide" data-i="2">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">02</span><div class="rule"></div><span class="n">THE PROBLEM</span></div>
+      <h2 class="title">$42B invested. Still no robots next to us.</h2>
+      <p class="lede">H1 2025 robotics funding. Robots still aren't part of everyday life &mdash; they don't learn like humans do.</p>
+      <div class="grid3">
+        <div class="card"><svg class="icon card-icon" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><line x1="3" y1="3" x2="21" y2="21"/></svg><span class="pain-num">01</span><h3 style="font-size:1.05rem">No self-failure-detection</h3><p style="color:var(--text-dim);font-size:.88rem;margin-top:6px">Fails silently. A human has to notice.</p></div>
+        <div class="card"><svg class="icon card-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg><span class="pain-num">02</span><h3 style="font-size:1.05rem">No self-reset</h3><p style="color:var(--text-dim);font-size:.88rem;margin-top:6px">A human resets the sim before it tries again.</p></div>
+        <div class="card"><svg class="icon card-icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="pain-num">03</span><h3 style="font-size:1.05rem">Expensive failure data</h3><p style="color:var(--text-dim);font-size:.88rem;margin-top:6px">The data worth having is hardest to collect.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4: HOW IT WORKS -->
+  <section class="slide" data-i="3">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">03</span><div class="rule"></div><span class="n">HOW IT WORKS</span></div>
+      <h2 class="title">Show it. Say it. It learns on its own.</h2>
+      <p class="lede">Show a robot a skill and describe it. A VLM decomposes it into sub-tasks. Each one learns itself, in a closed loop.</p>
+      <div class="loop-diagram" style="margin-top:48px">
+        <div class="loop-step"><span class="k">Input</span><span class="v">Show &amp; describe skill</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">VLM</span><span class="v">Decompose into tasks</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">Per task</span><span class="v">Autonomous learning loop</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">Output</span><span class="v">Deployed skill</span></div>
+      </div>
+      <p class="thesis">Tonight: two demos of that loop actually running &mdash; live, on real GPU compute.</p>
+    </div>
+  </section>
+
+  <!-- 5: DEMO 1 INTRO -->
+  <section class="slide" data-i="4">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">04</span><div class="rule"></div><span class="n">DEMO ONE</span></div>
+      <h2 class="title">Learning to walk on rough terrain</h2>
+      <p class="lede">A Go1 quadruped starts unable to balance. Each round: run it, measure how far it fell, retrain on that failure.</p>
+      <div class="grid3" style="margin-top:36px">
+        <div class="card"><div class="stat">200M</div><div class="stat-label">PPO steps, trained from scratch on rough terrain</div></div>
+        <div class="card"><div class="stat">10.4m</div><div class="stat-label">forward displacement achieved, verified on video</div></div>
+        <div class="card"><div class="stat">5/6</div><div class="stat-label">seeds walk 5m+, most surviving the full 20s episode</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6: DEMO 1 PROGRESSION -->
+  <section class="slide" data-i="5">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">04</span><div class="rule"></div><span class="n">DEMO ONE &middot; PROGRESSION</span></div>
+      <h2 class="title" style="font-size:1.5rem">From can't even balance &rarr; to walking confidently, forward and backward</h2>
+      <div class="progression of5">
+        <div class="stage fail"><span class="tag">Stage 1</span><video src="{{VIDEO:loco_stage0}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">Doesn't know how to balance</div><div class="stage-metric">random policy, falls immediately</div></div></div>
+        <div class="stage fail"><span class="tag">Stage 2</span><video src="{{VIDEO:loco_stage1}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">Learning to balance</div><div class="stage-metric">no walking gait yet</div></div></div>
+        <div class="stage fail"><span class="tag">Stage 3</span><video src="{{VIDEO:loco_stage2}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">A few steps, then falls</div><div class="stage-metric">early gait, unstable</div></div></div>
+        <div class="stage good"><span class="tag">Stage 4</span><video src="{{VIDEO:loco_stage3}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">Walking forward</div><div class="stage-metric">10.4m, full episode</div></div></div>
+        <div class="stage good"><span class="tag">Stage 5</span><video src="{{VIDEO:loco_stage4}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">Walking backward, stable</div><div class="stage-metric">no fall, rough terrain</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7: DEMO 2 INTRO -->
+  <section class="slide" data-i="6">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">05</span><div class="rule"></div><span class="n">DEMO TWO</span></div>
+      <h2 class="title">Multi-robot interaction: catching a leaping dog</h2>
+      <p class="lede">A humanoid learns to catch a leaping quadruped &mdash; a harder, contact-rich skill. Same loop, harder problem.</p>
+      <div class="loop-diagram" style="margin-top:48px">
+        <div class="loop-step"><span class="k">Start</span><span class="v">Both robots fall on contact</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">Iterate</span><span class="v">Humanoid stays balanced</span></div>
+        <div class="loop-arrow">&rarr;</div>
+        <div class="loop-step"><span class="k">Goal</span><span class="v">Humanoid positions &amp; catches</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8: DEMO 2 PROGRESSION -->
+  <section class="slide" data-i="7">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">05</span><div class="rule"></div><span class="n">DEMO TWO &middot; PROGRESSION</span></div>
+      <h2 class="title" style="font-size:1.5rem">From both robots collapsing &rarr; to a controlled catch &rarr; to the goal</h2>
+      <div class="progression">
+        <div class="stage fail"><span class="tag">Stage 1</span><video src="{{VIDEO:catch_stage1}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">Both fall on contact</div><div class="stage-metric">no catch behavior</div></div></div>
+        <div class="stage fail"><span class="tag">Stage 2</span><video src="{{VIDEO:catch_stage2}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">Humanoid balances, misses</div><div class="stage-metric">stays upright, no catch</div></div></div>
+        <div class="stage good"><span class="tag">Stage 3</span><video src="{{VIDEO:catch_stage3v1}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">Catches the dog</div><div class="stage-metric">post-curriculum policy</div></div></div>
+        <div class="stage goal"><span class="tag">Goal</span><video src="{{VIDEO:catch_stage4_goal}}" autoplay muted loop playsinline></video><div class="stage-body"><div class="stage-title">What we're working toward</div><div class="stage-metric">target behavior</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9: SPONSOR TECH -->
+  <section class="slide" data-i="8">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">06</span><div class="rule"></div><span class="n">BUILT WITH</span></div>
+      <h2 class="title">The stack behind the loop</h2>
+      <p class="lede">Ran end to end tonight on sponsor infrastructure.</p>
+      <div class="sponsor-grid">
+        <div class="sponsor-card"><svg class="icon card-icon" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/><line x1="9" y1="1" x2="9" y2="6"/><line x1="15" y1="1" x2="15" y2="6"/><line x1="9" y1="18" x2="9" y2="23"/><line x1="15" y1="18" x2="15" y2="23"/><line x1="1" y1="9" x2="6" y2="9"/><line x1="1" y1="15" x2="6" y2="15"/><line x1="18" y1="9" x2="23" y2="9"/><line x1="18" y1="15" x2="23" y2="15"/></svg><span class="badge">Compute</span><div class="name">CoreWeave</div><p>The GPU behind every run &mdash; a 200M-step from-scratch train on an RTX&nbsp;PRO&nbsp;6000 Blackwell.</p></div>
+        <div class="sponsor-card"><svg class="icon card-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="7" y1="13" x2="13" y2="13"/><line x1="7" y1="16" x2="11" y2="16"/></svg><span class="badge">Orchestration</span><div class="name">Molab</div><p>The whole loop &mdash; train, evaluate, render &mdash; ran from one live GPU-paired notebook.</p></div>
+        <div class="sponsor-card"><svg class="icon card-icon" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="15 6 21 6 21 12"/></svg><span class="badge">Tracking</span><div class="name">Weights &amp; Biases</div><p>Every training curve logged; Weave traces each curriculum step's reasoning.</p></div>
+        <div class="sponsor-card"><svg class="icon card-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="badge">Run review</span><div class="name">ARIA</div><p>Synthesizes iteration logs into the failure&rarr;fix story on screen right now.</p></div>
+        <div class="sponsor-card vision"><svg class="icon card-icon" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 16l10-10 3 3-10 10H6v-3Z"/></svg><span class="badge">Next step</span><div class="name">Typeface</div><p>Next: auto-generate this exact deck from a robot's own run history.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10: CLOSING -->
+  <section class="slide" data-i="9">
+    <div class="slide-inner">
+      <div class="kicker"><span class="n">07</span><div class="rule"></div><span class="n">CLOSING</span></div>
+      <h1 class="big" style="font-size:clamp(1.8rem,3.6vw,3rem)">A robot that fails, notices, and tries again &mdash; on its own.</h1>
+      <p class="thesis">Close the loop on detection, reset, and data &mdash; any robot learns any skill you can show it.</p>
+    </div>
+  </section>
+
+</div>
+
+<div class="brandmark">AUTONOMOUS ROBOT LEARNING LOOP</div>
+<div class="slidenum"><span id="cur">01</span> / <span id="tot">10</span></div>
+<footer class="nav">
+  <button class="navbtn" id="prev">&larr;</button>
+  <div class="dots" id="dots"></div>
+  <button class="navbtn" id="next">&rarr;</button>
+</footer>
+
+<script>
+(function(){
+  var slides = Array.from(document.querySelectorAll('.slide'));
+  var dotsEl = document.getElementById('dots');
+  var cur = 0;
+  slides.forEach(function(_, i){
+    var d = document.createElement('button');
+    d.className = 'dot' + (i===0?' active':'');
+    d.addEventListener('click', function(){ go(i); });
+    dotsEl.appendChild(d);
+  });
+  document.getElementById('tot').textContent = String(slides.length).padStart(2,'0');
+  function go(i){
+    if(i<0||i>=slides.length) return;
+    slides[cur].classList.remove('active');
+    dotsEl.children[cur].classList.remove('active');
+    cur = i;
+    slides[cur].classList.add('active');
+    dotsEl.children[cur].classList.add('active');
+    document.getElementById('cur').textContent = String(cur+1).padStart(2,'0');
+  }
+  document.getElementById('prev').addEventListener('click', function(){ go(cur-1); });
+  document.getElementById('next').addEventListener('click', function(){ go(cur+1); });
+  window.addEventListener('keydown', function(e){
+    if(e.key==='ArrowRight'||e.key===' ') go(cur+1);
+    if(e.key==='ArrowLeft') go(cur-1);
+  });
+  var startX=null;
+  document.getElementById('deck').addEventListener('touchstart', function(e){ startX=e.touches[0].clientX; });
+  document.getElementById('deck').addEventListener('touchend', function(e){
+    if(startX===null) return;
+    var dx = e.changedTouches[0].clientX - startX;
+    if(Math.abs(dx)>60) go(cur + (dx<0?1:-1));
+    startX=null;
+  });
+})();
+</script>
